@@ -1,36 +1,54 @@
-from flask import Flask, render_template_string, render_template, jsonify, request, redirect, url_for, session
-from flask import json
-from urllib.request import urlopen
-from werkzeug.utils import secure_filename
+from flask import Flask, render_template
 import sqlite3
 import os
 
-# --- ÉTAPE A : Importer tes tests ---
-# Assure-toi que test_api.py est bien dans le même dossier
-try:
-    from test_api import test_aviation_api
-except ImportError:
-    test_aviation_api = None
-
 app = Flask(__name__)
 
-@app.get("/")
-def consignes():
-     return render_template('consignes.html')
+# Chemin vers la base de données (sur PythonAnywhere)
+DB_PATH = '/home/VALPYTHON/mysite/database.db'
 
-# --- ÉTAPE B : La nouvelle route Dashboard ---
+def get_last_measure():
+    """Récupère la dernière ligne enregistrée dans la base de données."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        # On demande les résultats sous forme de dictionnaire
+        conn.row_factory = sqlite3.Row 
+        cursor = conn.cursor()
+        
+        # On récupère la toute dernière mesure (id le plus grand)
+        cursor.execute('SELECT date, status, latence FROM mesures ORDER BY id DESC LIMIT 1')
+        row = cursor.fetchone()
+        conn.close()
+        return row
+    except Exception as e:
+        print(f"Erreur lecture SQLite : {e}")
+        return None
+
+@app.route('/')
+def consignes():
+    return render_template('consignes.html')
+
 @app.route('/dashboard')
 def dashboard():
-    # Pour l'instant on utilise des données de test
-    # Plus tard, on lira la base de données SQLite (Étape 6)
-    stats_api = {
-        "nom": "Aviation Stack",
-        "status": "Opérationnel",
-        "latence": "0.78s",
-        "derniere_verif": "10/04/2026"
-    }
+    derniere_mesure = get_last_measure()
+    
+    if derniere_mesure:
+        stats_api = {
+            "nom": "Aviation Stack",
+            "status": derniere_mesure['status'],
+            "latence": f"{derniere_mesure['latence']}s",
+            "derniere_verif": derniere_mesure['date']
+        }
+    else:
+        # Données par défaut si la base est vide
+        stats_api = {
+            "nom": "Aviation Stack",
+            "status": "Aucune donnée",
+            "latence": "N/A",
+            "derniere_verif": "Jamais"
+        }
+        
     return render_template('dashboard.html', data=stats_api)
 
 if __name__ == "__main__":
-    # utile en local uniquement
     app.run(host="0.0.0.0", port=5000, debug=True)
